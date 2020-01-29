@@ -1,0 +1,87 @@
+---
+- hosts: cluster
+  vars_files:
+    - vars/quobyte.yaml
+  tasks:
+    - name: Download Quobyte Software for id {{ repo_id }}
+      get_url:
+        url: https://packages.quobyte.com/repo/3/{{ repo_id }}/install_quobyte
+        dest: /root/install_quobyte
+        mode: '0755'
+    - name: Install packages Centos
+      yum:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - java-1.8.0-openjdk
+        - chrony
+        - atop
+        - htop
+        - git
+        - openmpi-devel
+        - automake
+        - autoconf
+        when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+      ignore_errors: yes
+    - name: Disable SE Linux
+      shell:
+        cmd: /usr/sbin/setenforce 0
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - name: Ensure SELinux is set to disabled mode
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: SELINUX=disabled
+      register: command_result
+      failed_when: "'FAILED' in command_result.stderr"
+      ignore_errors: yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - name: Ensure Apparmor is stopped
+      service:
+        name: apparmor
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+    - name: Remove apparmor
+      package:
+        name: apparmor
+        state: absent
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+      ignore_errors: yes
+    - name: Remove swaps from fstab
+      lineinfile:
+        dest: /etc/fstab
+        regexp: '^/[\S]+\s+swap\s+swap'
+        state: absent
+      notify: disable swap
+    - name: Disable swap
+      shell:
+        cmd: swapoff -a
+- hosts: master
+  vars_files:
+    - vars/quobyte.yaml
+  tasks:
+    - name: Clone ior
+      shell:
+        cmd: cd /root && git clone https://github.com/hpc/ior
+    - name: Compile ior
+      shell:
+        cmd: cd ior && module load mpi/openmpi-x86_64 && ./bootstrap && ./configure && make clean && make
+- hosts: cluster
+  tasks:
+    - name: Copy mdtest files
+      copy:
+         src: /root/ior/src/mdtest 
+         dest: /usr/local/bin/
+         mode: '0755' 
+    - name: Copy ior files
+      copy:
+         src: /root/ior/src/ior 
+         dest: /usr/local/bin/
+         mode: '0644'
