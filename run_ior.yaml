@@ -1,0 +1,99 @@
+---
+- hosts: clients
+  tasks:
+    - name: Install packages Centos
+      yum:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - java-1.8.0-openjdk
+        - chrony
+        - atop
+        - htop
+        - git
+        - fio
+        - nload
+        - openmpi-devel
+        - netdata
+    - name: Remove strict host checking
+      blockinfile:
+        dest: ${HOME}/.ssh/config
+        block: |
+              Host *
+                  StrictHostKeyChecking no
+                  UserKnownHostsFile=/dev/null
+        create: yes
+- hosts: master
+  vars_files:
+    - vars/test_config.yaml
+  tasks:
+    - name: Create a directory if it does not exist
+      file:
+        path: /root/ior-results
+        state: directory
+        mode: '0755'
+    - name: Running IOR test-rf1
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf1"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_rf1 }}"
+        - "{{ size }}"
+    - name: Running IOR test-rf3-tuned
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf3-tuned"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_rf3_tuned }}"
+        - "{{ size }}"
+    - name: Running IOR test-rf3
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf3"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_rf3 }}"
+        - "{{ size }}"
+    - name: Running IOR test-ec21-small
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec21-small"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_ec21_small }}"
+        - "{{ size }}"
+    - name: Running IOR test-ec21
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec21"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_ec21 }}"
+        - "{{ size }}"
+    - name: Running IOR test-ec42-small
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec42-small"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_ec42_small }}"
+        - "{{ size }}"
+    - name: Running IOR test-ec42
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec42"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_ec42 }}"
+        - "{{ size }}"
+    - name: Running IOR test-ec82-small
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec82-small"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_ec82_small }}"
+        - "{{ size }}"
+    - name: Running IOR test-ec82
+      shell:
+        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec82"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_ec82 }}"
+        - "{{ size }}"

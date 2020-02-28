@@ -1,26 +1,9 @@
 [master]
-qnode1
-
-[nodes]
-qnode2
-qnode3
-qnode4
-
-[cluster]
-qnode1
-qnode2
-qnode3
-qnode4
-
-[diskformat]
-qnode1
-qnode2
-qnode3
-qnode4
+5U84-node1
 
 [clients]
-#mdtest-node1
-#mdtest-node2
-#mdtest-node3
-#mdtest-node4
+5U84-node1
+5U84-node2
+5U84-node3
+5U84-node4
 
