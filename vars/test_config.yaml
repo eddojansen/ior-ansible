@@ -1,8 +1,8 @@
 results: ~/ior-results
-mpi: "module load mpi/openmpi-x86_64 && mpirun --allow-run-as-root"
+mpi: "mpirun --allow-run-as-root"
 ior: "ior -vvv -a POSIX -i5 -g -r -w -T 5 -F -C -k"
 mountpoint: "/quobyte/"
-nodes: "-machinefile ~/nodes2"
+nodes: "-machinefile nodes"
 threads:
   - "-npernode 16 -np 64"
   - "-npernode 8 -np 32"
@@ -17,27 +17,18 @@ size:
 test_rf1: 
   - "-o vol0-rf1/seq -b 10g"
   - "-o vol0-rf1/rand -z -b 1g"
-test_rf3_tuned:
-  - "-o vol0-rf3-tuned/seq -b 10g"
-  - "-o vol0-rf3-tuned/rand -z -b 100m"
 test_rf3:
   - "-o vol0-rf3/seq -b 10g"
   - "-o vol0-rf3/rand -z -b 1g"
 test_ec21_small:
   - "-o vol0-ec21-small/seq -b 10g"
-  - "-o vol0-ec21-small/rand -z -b 1g"
 test_ec21:  
   - "-o vol0-ec21/seq -b 10g"
-  - "-o vol0-ec21/rand -z -b 1g"
 test_ec42_small:
   - "-o vol0-ec42-small/seq -b 10g"
-  - "-o vol0-ec42-small/rand -z -b 1g"
 test_ec42:
   - "-o vol0-ec42/seq -b 10g"
-  - "-o vol0-ec42/rand -z -b 1g"
 test_ec82_small:
   - "-o vol0-ec82-small/seq -b 10g"
-  - "-o vol0-ec82-small/rand -z -b 1g"
 test_ec82:
   - "-o vol0-ec82/seq -b 10g"
-  - "-o vol0-ec82/rand -z -b 1g"

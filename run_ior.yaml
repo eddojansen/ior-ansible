@@ -1,22 +1,42 @@
 ---
-- hosts: clients
+- hosts: master
+  vars_files:
+    - vars/test_config.yaml
+  become: yes
   tasks:
-    - name: Install packages Centos
-      yum:
+    - name: Install packages
+      apt:
         name: "{{ packages }}"
         state: present
-        update_cache: yes
       vars:
         packages:
-        - java-1.8.0-openjdk
         - chrony
         - atop
         - htop
         - git
-        - fio
         - nload
-        - openmpi-devel
+        - libopenmpi-dev
         - netdata
+        - automake
+        - autoconf
+- hosts: clients
+  become: yes
+  tasks:
+    - name: Install packages
+      apt:
+        name: "{{ packages }}"
+        state: present
+      vars:
+        packages:
+        - chrony
+        - atop
+        - htop
+        - git
+        - nload
+        - libopenmpi-dev
+        - netdata
+        - automake
+        - autoconf
     - name: Remove strict host checking
       blockinfile:
         dest: ${HOME}/.ssh/config
@@ -25,9 +45,25 @@
                   StrictHostKeyChecking no
                   UserKnownHostsFile=/dev/null
         create: yes
+      ignore_errors: yes
+    - name: Copy ior binary
+      copy:
+         src:  templates/ior
+         dest: /usr/local/bin
+         mode: '0770'
+    - name: Copy mdtest binary
+      copy:
+         src:  templates/mdtest
+         dest: /usr/local/bin
+         mode: '0770'
+    - name: Symlink orted
+      shell:
+        cmd: ln -s /usr/lib64/openmpi/bin/orted /usr/local/bin/orted
+      ignore_errors: yes
 - hosts: master
   vars_files:
     - vars/test_config.yaml
+  become: yes
   tasks:
     - name: Create a directory if it does not exist
       file:
@@ -40,13 +76,6 @@
       with_nested:
         - "{{ threads }}"
         - "{{ test_rf1 }}"
-        - "{{ size }}"
-    - name: Running IOR test-rf3-tuned
-      shell:
-        cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf3-tuned"
-      with_nested:
-        - "{{ threads }}"
-        - "{{ test_rf3_tuned }}"
         - "{{ size }}"
     - name: Running IOR test-rf3
       shell:
@@ -80,7 +109,7 @@
       shell:
         cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec42"
       with_nested:
-        - "{{ threads }}"
+        - "{{ threads }"
         - "{{ test_ec42 }}"
         - "{{ size }}"
     - name: Running IOR test-ec82-small

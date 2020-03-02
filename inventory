@@ -1,9 +1,8 @@
 [master]
-5U84-node1
+ubuntu1
 
 [clients]
-5U84-node1
-5U84-node2
-5U84-node3
-5U84-node4
-
+ubuntu1
+ubuntu2
+ubuntu3
+ubuntu4
