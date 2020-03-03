@@ -1,28 +1,22 @@
 ---
-- hosts: master
-  vars_files:
-    - vars/test_config.yaml
-  become: yes
-  tasks:
-    - name: Install packages
-      apt:
-        name: "{{ packages }}"
-        state: present
-      vars:
-        packages:
-        - chrony
-        - atop
-        - htop
-        - git
-        - nload
-        - libopenmpi-dev
-        - netdata
-        - automake
-        - autoconf
 - hosts: clients
   become: yes
   tasks:
-    - name: Install packages
+    - name: Install packages Centos
+      yum:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - chrony
+        - atop
+        - htop
+        - git
+        - nload
+        - openmpi-devel
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - name: Install packages Ubuntu
       apt:
         name: "{{ packages }}"
         state: present
@@ -34,9 +28,7 @@
         - git
         - nload
         - libopenmpi-dev
-        - netdata
-        - automake
-        - autoconf
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
     - name: Remove strict host checking
       blockinfile:
         dest: ${HOME}/.ssh/config
@@ -46,16 +38,30 @@
                   UserKnownHostsFile=/dev/null
         create: yes
       ignore_errors: yes
-    - name: Copy ior binary
+    - name: Copy Centos ior binary
       copy:
-         src:  templates/ior
+         src:  templates/centos/ior
          dest: /usr/local/bin
-         mode: '0770'
-    - name: Copy mdtest binary
+         mode: '0777'
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - name: Copy Ubuntu ior binary
       copy:
-         src:  templates/mdtest
+         src:  templates/ubuntu/ior
          dest: /usr/local/bin
-         mode: '0770'
+         mode: '0777'
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+    - name: Copy Centos mdtest binary
+      copy:
+         src:  templates/centos/mdtest
+         dest: /usr/local/bin
+         mode: '0777'
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - name: Copy Ubuntu mdtest binary
+      copy:
+         src:  templates/ubuntu/mdtest
+         dest: /usr/local/bin
+         mode: '0777'
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
     - name: Symlink orted
       shell:
         cmd: ln -s /usr/lib64/openmpi/bin/orted /usr/local/bin/orted
@@ -63,13 +69,17 @@
 - hosts: master
   vars_files:
     - vars/test_config.yaml
-  become: yes
   tasks:
     - name: Create a directory if it does not exist
       file:
-        path: /root/ior-results
+        path: ~/ior-results
         state: directory
         mode: '0755'
+    - name: Load mpi module
+      shell:
+        cmd: module load mpi/openmpi-x86_64
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    - pause: 
     - name: Running IOR test-rf1
       shell:
         cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf1"

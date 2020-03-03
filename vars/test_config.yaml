@@ -1,12 +1,12 @@
 results: ~/ior-results
-mpi: "mpirun --allow-run-as-root"
+mpi: "mpirun --allow-run-as-root -oversubscribe"
 ior: "ior -vvv -a POSIX -i5 -g -r -w -T 5 -F -C -k"
 mountpoint: "/quobyte/"
 nodes: "-machinefile nodes"
 threads:
-  - "-npernode 16 -np 64"
-  - "-npernode 8 -np 32"
-  - "-npernode 4 -np 16"
+  - "-npernode 4"
+  - "-npernode 8"
+  - "-npernode 16"
 size:
   - "-t 128k"
   - "-t 64k"
