@@ -79,7 +79,6 @@
       shell:
         cmd: module load mpi/openmpi-x86_64
       when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
-    - pause: 
     - name: Running IOR test-rf1
       shell:
         cmd: "{{ mpi }} -wd {{ mountpoint }} {{ nodes}} {{ item.0 }} {{ ior }} {{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf1"
