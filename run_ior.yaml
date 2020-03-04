@@ -66,6 +66,8 @@
       shell:
         cmd: ln -s /usr/lib64/openmpi/bin/orted /usr/local/bin/orted
       ignore_errors: yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
 - hosts: master
   vars_files:
     - vars/test_config.yaml
