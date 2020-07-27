@@ -1,0 +1,282 @@
+---
+- hosts: clients
+  vars_files:
+    - vars/test_config.yaml
+  become: yes
+  tasks:
+
+    - name: Install Epel Centos
+      yum:
+        name: epel-release
+        state: present
+        update_cache: yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+      tags: packages
+
+    - name: Stop and Disable Firewalld
+      service:
+        name: firewalld
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+      tags: prep
+
+    - name: Disable SE Linux
+      shell:
+        cmd: /usr/sbin/setenforce 0
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+      tags: prep
+
+    - name: Disable SELinux permanently
+      selinux:
+        state: disabled
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+      tags: prep
+
+    - name: Ensure Apparmor is stopped
+      service:
+        name: apparmor
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+      tags: prep
+
+    - name: Remove apparmor
+      package:
+        name: apparmor
+        state: absent
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+      ignore_errors: yes
+      tags: prep
+
+- hosts: master
+  vars_files:
+    - vars/test_config.yaml
+  become: yes
+  tasks:
+
+    - name: Install build packages
+      yum:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - autoconf
+        - automake
+        - libtool
+        - gcc
+        - git
+        - libgfortran
+        - python3
+        - python3-dnf
+        - nload
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+      tags: packages
+
+    - name: Correct python version selected
+      alternatives:
+        name: python
+        path: /usr/bin/python3
+
+- hosts: master
+  vars_files:
+    - vars/test_config.yaml
+  become: no
+  tasks:
+
+    - git:
+        repo: https://github.com/pmodels/mpich.git
+        dest: /tmp/mpich
+        recursive: yes
+        clone: yes
+        update: yes
+        force: yes
+
+    - git:
+        repo: https://github.com/hpc/ior.git
+        dest: /tmp/ior
+        recursive: no
+        clone: yes
+        update: yes
+        force: yes
+
+    - name: autogen mpich
+      shell: ./autogen.sh -without-ucx 2>&1 | tee autogen.txt
+      args:
+        chdir: /tmp/mpich
+
+    - name: configure mpich
+      shell: ./configure --disable-fortran --with-file-system=ufs+nfs+quobytefs --with-device=ch3 --prefix=/quobyte/config/mpich-install 2>&1 | tee configure.txt
+      args: 
+        chdir: /tmp/mpich
+ 
+    - name: make mpich
+      shell: make install -j 2>&1 | tee make.txt
+      args:
+        chdir: /tmp/mpich
+
+    - name: bootstrap IOR
+      shell: PATH=/quobyte/config/mpich-install/bin:$PATH && export PATH && ./bootstrap 2>&1 | tee bootstrap.txt
+      args:
+        chdir: /tmp/ior
+
+    - name: configure IOR
+      shell: PATH=/quobyte/config/mpich-install/bin:$PATH && export PATH && ./configure --prefix=/quobyte/config/ior 2>&1 | tee configure.txt
+      args:
+        chdir: /tmp/ior
+
+    - name: make IOR
+      shell: PATH=/quobyte/config/mpich-install/bin:$PATH && export PATH && make install -j 2>&1 | tee configure.txt
+      args:
+        chdir: /tmp/ior
+
+- hosts: clients
+  vars_files:
+    - vars/test_config.yaml
+  tasks:
+
+    - name: Ensure irqbalance is set to oneshot - Centos
+      lineinfile:
+        path: /etc/sysconfig/irqbalance
+        regexp: '^#IRQBALANCE_ONESHOT='
+        line: IRQBALANCE_ONESHOT=1
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+      tags: tune
+
+    - name: Ensure irqbalance is set to oneshot - Ubuntu
+      lineinfile:
+        path: /etc/default/irqbalance
+        regexp: '^#IRQBALANCE_ONESHOT='
+        line: IRQBALANCE_ONESHOT=1
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+      tags: tune
+
+    - name: Restart irqbalance
+      service:
+        name: irqbalance
+        state: restarted
+        enabled: yes
+      tags: tune
+
+    - name: Configure quobyte client configuration
+      blockinfile:
+        path: /etc/quobyte/client-service.cfg
+        block: |
+          options=default_permissions
+          disable-xattrs
+          features=fast_read
+          sequential_window_max_prefetch_horizon=20
+          multiclient_nr_clients=4
+          enable-unaligned-direct-io=true
+      tags: tune
+
+    - name: Restart quobyte-client
+      service:
+        name: quobyte-client
+        state: restarted
+        enabled: yes
+      tags: tune
+
+    - name: Configure /etc/hosts
+      blockinfile:
+        path: /etc/hosts
+        block: |
+          {{ registry_ip }} {{ registry }}
+      tags: tune
+
+- hosts: master
+  vars_files:
+    - vars/test_config.yaml
+  tasks:
+
+    - name: Create a ior directory if it does not exist
+      file:
+        path: ~/ior-results
+        state: directory
+        mode: '0755'
+      tags: ior,tests
+
+    - name: Running ior_mpiio test-rf1
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ ior_mpiio }} {{ mountpoint_mpiio }}{{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf1"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_rf1 }}"
+        - "{{ size }}"
+      tags: rf1,ior,tests
+
+    - name: Running ior_posix test-rf1
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ ior_posix }} {{ mountpoint_posix }}{{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf1"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ size }}"
+        - "{{ test_rf1 }}"
+      tags: ior,tests
+
+    - name: Running ior_mpiio test-rf3
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ ior_mpiio }} {{ mountpoint_mpiio }}{{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf3"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_rf3 }}"
+        - "{{ size }}"
+      tags: ior,tests
+
+    - name: Running ior_posix test-rf3
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ ior_posix }} {{ mountpoint_posix }}{{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-rf3"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_rf3 }}"
+        - "{{ size }}"
+      tags: ior,tests
+
+    - name: Running ior_mpiio test-ec42
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ ior_mpiio }} {{ mountpoint_mpiio }}{{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec42"
+      with_nested:
+        - "{{ threads }"
+        - "{{ test_ec42 }}"
+        - "{{ size }}"
+      tags: ior,tests
+
+    - name: Running ior_posix test-ec42
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ ior_posix }} {{ mountpoint_posix }}{{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec42"
+      with_nested:
+        - "{{ threads }"
+        - "{{ test_ec42 }}"
+        - "{{ size }}"
+      tags: ior,tests
+
+    - name: Running ior_mpiio test-ec82
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ ior_mpiio }} {{ mountpoint_mpiio }}{{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec82"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_ec82 }}"
+        - "{{ size }}"
+      tags: ior,tests
+
+    - name: Running ior_posix test-ec82
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ ior_posix }} {{ mountpoint_posix }}{{ item.1 }} {{item.2 }} | tee >> {{ results }}/test-ec82"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_ec82 }}"
+        - "{{ size }}"
+      tags: ior,tests
+
+    - name: Running mdtest on rf1&rf3
+      shell:
+        cmd: "{{ mpi }} {{ nodes}} {{ item.0 }} {{ mdtest }} {{ item.1 }} | tee >> {{ results }}/test_mdtest"
+      with_nested:
+        - "{{ threads }}"
+        - "{{ test_mdtest }}"
+      tags: mdtest,tests

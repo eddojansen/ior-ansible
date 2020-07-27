@@ -1,8 +1,16 @@
+[all:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+ansible_python_interpreter=/usr/bin/python3
+
+[storage]
+centos8-1
+
 [master]
-ubuntu1
+centos8-8
 
 [clients]
-ubuntu1
-ubuntu2
-ubuntu3
-ubuntu4
+centos8-5
+centos8-6
+centos8-7
+centos8-8
+
